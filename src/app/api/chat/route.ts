@@ -1,4 +1,3 @@
-// src/app/api/chat/route.ts
 import { NextResponse } from 'next/server';
 import fs from 'fs/promises';
 import path from 'path';
@@ -132,7 +131,8 @@ export async function POST(request: Request) {
 
     if (!response.ok) {
         let errorBody = 'Could not read error body.';
-        try { errorBody = await response.text(); } catch (_) { /* ignore */ }
+        // FIX APPLIED HERE: Removed the unused variable binding `_` from catch
+        try { errorBody = await response.text(); } catch { /* ignore */ }
         console.error(`OpenRouter API error: ${response.status} ${response.statusText}. Body: ${errorBody}`);
         throw new Error(`OpenRouter API request failed with status ${response.status}: ${errorBody.substring(0, 500)}`);
     }

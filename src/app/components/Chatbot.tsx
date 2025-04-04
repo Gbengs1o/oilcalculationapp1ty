@@ -74,7 +74,8 @@ export default function Chatbot() {
               const errorData = await response.json();
               // Try to get more specific error details if available
               errorDetails = errorData.details || errorData.error?.message || errorData.error || errorDetails;
-          } catch (_) { /* Ignore if response isn't valid JSON */ }
+          // FIX: Removed unused '_' from catch block
+          } catch { /* Ignore if response isn't valid JSON */ }
           throw new Error(`API error ${response.status}: ${errorDetails}`);
       }
 
@@ -130,6 +131,7 @@ export default function Chatbot() {
             </svg>
             <p className="mt-3 text-lg font-medium text-slate-700">Welcome!</p>
             <p className="text-slate-500">Ask about drilling formulas, calculations, or concepts.</p>
+            {/* FIX: Replaced literal double quotes with " */}
             <p className="mt-4 text-sm text-slate-400 italic">e.g., "Calculate hydrostatic pressure for 12000 ft TVD with 11.5 ppg mud."</p>
           </div>
         ) : (
