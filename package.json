@@ -3,10 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
-    "build": "next build",
+    "dev": "npm run extract-pdf && next dev",
+    "build": "npm run extract-pdf && next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "extract-pdf": "node ./scripts/extract-pdf-text.mjs",
+    "dev-turbo": "npm run extract-pdf && next dev --turbopack"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",

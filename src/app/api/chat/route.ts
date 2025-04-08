@@ -1,56 +1,57 @@
 // src/app/api/chat/route.ts
 import { NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
-import pdfParse from 'pdf-parse';
+// REMOVED: No longer importing pdf-parse here for runtime execution
+// import pdfParse from 'pdf-parse';
+import pdfData from '@/generated/pdf-content.json'; // Import the pre-extracted data
 
-// --- PDF Content Handling ---
-// (Keep existing extractPdfContent function as is)
+// --- PDF Content Handling (Using Pre-extracted Data) ---
+// Caching might be less critical now, but can still prevent repeated string access
 let pdfContentCache: string | null = null;
 let pdfCacheTimestamp: number | null = null;
-const PDF_CACHE_DURATION = 10 * 60 * 1000; // Cache PDF content for 10 minutes
+const PDF_CACHE_DURATION = 10 * 60 * 1000; // Cache for 10 minutes (optional)
 
 async function extractPdfContent(): Promise<string> {
     const now = Date.now();
+    // Optional: Keep cache for performance if needed
     if (pdfContentCache && pdfCacheTimestamp && (now - pdfCacheTimestamp < PDF_CACHE_DURATION)) {
-        console.log("Returning PDF content from cache.");
+        // console.log("Returning PDF content from runtime cache."); // Less verbose log
         return pdfContentCache;
     }
-    console.log("Cache expired or empty, reading PDF file...");
+
+    console.log("Loading pre-extracted PDF content from generated JSON...");
     try {
-        const pdfRelativePath = path.join('test', 'data', '05-versions-space.pdf'); // ADJUST IF NEEDED
-        const pdfPath = path.join(process.cwd(), pdfRelativePath);
+        // Access the content directly from the imported JSON
+        // Make sure the structure matches what extract-pdf-text.mjs creates ({ "content": "..." })
+        const content = pdfData.content;
 
-        console.log(`Attempting to read PDF from: ${pdfPath}`);
-        try {
-            await fs.access(pdfPath);
-            console.log(`PDF file found at: ${pdfPath}`);
-        } catch (accessError) {
-            console.error(`PDF file not found at specified path: ${pdfPath}`);
-            throw new Error(`Configuration error: PDF file not found at ${pdfPath}. Please ensure the file exists and the path in route.ts is correct.`);
+        if (typeof content !== 'string') {
+             console.error("Invalid or missing 'content' key in src/generated/pdf-content.json");
+             throw new Error("Pre-extracted PDF content is invalid or missing 'content' key.");
         }
 
-        const dataBuffer = await fs.readFile(pdfPath);
-        const data = await pdfParse(dataBuffer);
-
-        if (!data || !data.text) {
-            throw new Error('pdf-parse failed to extract text from the PDF.');
+        if (content.length === 0) {
+             console.warn("Warning: Pre-extracted PDF content loaded from JSON is empty.");
         }
 
-        pdfContentCache = data.text;
-        pdfCacheTimestamp = now;
-        console.log(`PDF content extracted and cached. Length: ${pdfContentCache?.length ?? 0}`);
+        pdfContentCache = content;
+        pdfCacheTimestamp = now; // Update cache timestamp if using cache
+        console.log(`PDF content loaded from JSON. Length: ${pdfContentCache?.length ?? 0}`);
         return pdfContentCache;
+
     } catch (error) {
-        console.error('--- Error extracting PDF content ---');
-        pdfContentCache = null;
+        console.error('--- Error loading pre-extracted PDF content ---');
+        pdfContentCache = null; // Clear cache on error
         pdfCacheTimestamp = null;
+
         if (error instanceof Error) {
-            console.error('PDF Reading/Parsing Error:', error.message);
-            throw error;
+            console.error('Error details:', error.message);
+             // Log stack trace for better debugging
+            console.error('Stack Trace:', error.stack);
+            // Re-throw a user-friendly error
+            throw new Error(`Failed to load required PDF context from pre-generated data: ${error.message}`);
         } else {
-            console.error('Unknown error during PDF extraction:', error);
-            throw new Error('An unknown error occurred during PDF extraction');
+            console.error('Unknown error loading PDF data:', error);
+            throw new Error('An unknown error occurred while loading PDF context from pre-generated data');
         }
     }
 }
@@ -62,6 +63,7 @@ async function extractPdfContent(): Promise<string> {
  * Sanitizes graph data: corrects keys (incl. scatter x/y mapping), ensures numeric types.
  */
 function sanitizeGraphData(graphData: any): any {
+    // --- (This function remains exactly as it was) ---
     if (!graphData || typeof graphData !== 'object' || !graphData.type || !Array.isArray(graphData.data)) {
         console.warn("[sanitizeGraphData] Invalid graph data structure passed.");
         return graphData;
@@ -239,7 +241,7 @@ function sanitizeGraphData(graphData: any): any {
  * Sanitizes table data: ensures row length consistency.
  */
  function sanitizeTableData(tableData: any): any {
-    // (Keep existing sanitizeTableData function as is)
+    // --- (This function remains exactly as it was) ---
     if (!tableData || typeof tableData !== 'object' || !Array.isArray(tableData.headers) || !Array.isArray(tableData.rows)) {
         console.warn("[sanitizeTableData] Invalid table data structure passed.");
         return tableData;
@@ -279,7 +281,7 @@ function sanitizeGraphData(graphData: any): any {
  * Attempts to add missing markers if valid JSON is found.
  */
 function processAndEnsureDataFormatting(content: string): string {
-    // (Keep existing processAndEnsureDataFormatting function as is)
+    // --- (This function remains exactly as it was) ---
     const graphMarkerRegex = /<!--GRAPH_DATA:([\s\S]*?)-->/;
     const tableMarkerRegex = /<!--TABLE_DATA:([\s\S]*?)-->/;
 
@@ -362,13 +364,13 @@ function processAndEnsureDataFormatting(content: string): string {
 
 // --- API Route Handler ---
 export async function POST(request: Request) {
-    // (Keep the main POST handler logic largely the same)
-    // ... (Input validation, PDF context, System Prompt, API Call Config) ...
+    // --- (This POST handler function remains exactly the same as before) ---
+    // It will now call the *new* extractPdfContent which reads the JSON.
     console.log("Received POST request to /api/chat");
     try {
         const { messages } = await request.json();
 
-        // Input Validation
+        // Input Validation (Keep as is)
         if (!messages || !Array.isArray(messages) || messages.length === 0) {
             console.error("Invalid request body: 'messages' array missing, empty or invalid.");
             return NextResponse.json({ error: 'Invalid request body', details: 'Missing or invalid messages array' }, { status: 400 });
@@ -379,9 +381,9 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Invalid message sequence', details: 'Last message must be from user' }, { status: 400 });
         }
 
-        // Get PDF Context
+        // Get PDF Context (Uses the NEW JSON-reading function)
         console.log("Ensuring PDF context is available...");
-        const pdfContent = await extractPdfContent();
+        const pdfContent = await extractPdfContent(); // <-- Reads from imported JSON
 
         const maxContextChars = 8000; // Limit context size
         const contextSnippet = pdfContent.substring(0, maxContextChars);
@@ -389,8 +391,10 @@ export async function POST(request: Request) {
             console.log(`PDF context truncated to ${maxContextChars} characters.`);
         }
 
-        // --- System Prompt (Keep your existing detailed prompt) ---
-         const systemMessage = {
+        // --- System Prompt (Keep as is) ---
+        // Ensure your full system prompt is pasted within the backticks
+           // --- System Prompt (Keep your existing detailed prompt) ---
+           const systemMessage = {
             role: "system",
             // --- PASTE YOUR FULL SYSTEM PROMPT HERE ---
              content: `You are an expert assistant specializing in oil engineering formulas, calculations, data visualization (graphs), and data presentation (tables), using knowledge from the provided PDF context. If the answer isn't in the context, clearly state that. Be concise and accurate.
@@ -507,31 +511,30 @@ export async function POST(request: Request) {
             // --- END OF SYSTEM PROMPT ---
         };
 
-
         const messagesWithContext = [systemMessage, ...messages];
 
-        // Environment Variable Check
+        // Environment Variable Check (Keep as is)
         if (!process.env.OPENROUTER_API_KEY) {
             console.error("CRITICAL: OPENROUTER_API_KEY environment variable is not set.");
             throw new Error("Server configuration error: API Key is missing.");
         }
 
-        // API Call Configuration
+        // API Call Configuration (Keep as is)
         const openRouterUrl = 'https://openrouter.ai/api/v1/chat/completions';
         const apiKey = process.env.OPENROUTER_API_KEY;
-        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+        const siteUrlEnv = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
         const siteName = process.env.NEXT_PUBLIC_SITE_NAME || 'Drilling Assistant';
-        const modelToUse = 'nvidia/llama-3.1-nemotron-70b-instruct:free'; // Or your preferred model
+        const modelToUse = 'nvidia/llama-3.1-nemotron-70b-instruct:free';
         const maxTokensToRequest = 4096;
 
         console.log(`Sending request to OpenRouter model: ${modelToUse} (Max Tokens: ${maxTokensToRequest})`);
 
-        // Perform API Call
+        // Perform API Call (Keep as is)
         const response = await fetch(openRouterUrl, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${apiKey}`,
-                'HTTP-Referer': siteUrl,
+                'HTTP-Referer': siteUrlEnv,
                 'X-Title': siteName,
                 'Content-Type': 'application/json',
             },
@@ -541,10 +544,9 @@ export async function POST(request: Request) {
                 max_tokens: maxTokensToRequest,
             }),
         });
-
         console.log(`OpenRouter response status: ${response.status}`);
 
-        // Robust Response Handling (largely unchanged)
+        // Robust Response Handling (Keep as is)
         let responseData;
         const contentType = response.headers.get("content-type");
 
@@ -563,6 +565,7 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'API Error', details: `Upstream API returned invalid JSON. Status: ${response.status}.` }, { status: 502 });
         }
 
+        // Handle OpenRouter's structured errors (Keep as is)
         if (responseData && responseData.error) {
             console.error('OpenRouter returned an error in the response body:', responseData.error);
             let statusCode = 502;
@@ -577,25 +580,27 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'API Request Failed', details: detailMessage, code: errorCode }, { status: statusCode });
         }
 
+        // Handle general non-OK HTTP responses (Keep as is)
         if (!response.ok) {
              console.error(`OpenRouter API HTTP error: ${response.status} ${response.statusText}. Body: ${JSON.stringify(responseData)}`);
              const status = response.status >= 500 ? 502 : response.status;
              return NextResponse.json({ error: 'API Communication Error', details: `Upstream API request failed with status ${response.status}. ${responseData?.error?.message || response.statusText}` }, { status });
         }
 
+        // Validate response structure (Keep as is)
         if (!responseData?.choices?.[0]?.message?.content) {
             console.error("Received successful status, but unexpected response structure from OpenRouter:", responseData);
             return NextResponse.json({ error: 'API Response Error', details: 'Received an unexpected response format from the AI provider.' }, { status: 500 });
         }
 
-        // --- Apply Enhanced Formatting and Sanitization ---
+        // --- Apply Enhanced Formatting and Sanitization --- (Keep as is)
         console.log("--- Applying Enhanced Formatting/Sanitization ---");
         let originalContent = responseData.choices[0].message.content;
-        let processedContent = processAndEnsureDataFormatting(originalContent); // Apply the fix here
+        let processedContent = processAndEnsureDataFormatting(originalContent);
         responseData.choices[0].message.content = processedContent;
         console.log("--- Finished Formatting/Sanitization ---");
 
-        // --- Success ---
+        // --- Success --- (Keep as is)
         console.log("Successfully received and processed valid response from OpenRouter.");
         if (process.env.NODE_ENV === 'development') {
              if (originalContent !== processedContent) {
@@ -610,18 +615,25 @@ export async function POST(request: Request) {
         return NextResponse.json(responseData);
 
     } catch (error: unknown) {
-        // (Keep existing catch block as is)
+        // --- Fatal Error Catch Block (Keep as is) ---
+        // Should now only catch errors from JSON loading, API key, or OpenRouter call
         console.error('--- Fatal Error in /api/chat POST handler ---:', error);
-        let errorMessage = 'Unknown server error occurred';
+        let errorMessage = 'An unknown server error occurred';
         let status = 500;
 
         if (error instanceof Error) {
             errorMessage = error.message;
-            if (errorMessage.startsWith('Configuration error: PDF file not found')) {
-                console.error("PDF Configuration Error:", errorMessage);
-            } else if (errorMessage.includes("API Key is missing")) {
-                 status = 500;
-            }
+             if (errorMessage.startsWith('Failed to load required PDF context')) {
+                 console.error("Pre-extracted PDF Loading Error (caught by handler):", errorMessage);
+             } else if (errorMessage.includes("API Key is missing")) {
+                  console.error("API Key Configuration Error (caught by handler):", errorMessage);
+             } else {
+                 console.error(`Caught unexpected error in POST handler: ${errorMessage}`);
+                 console.error('Stack Trace (if available):', error.stack);
+             }
+        } else {
+             console.error(`Caught non-Error object in POST handler:`, error);
+             errorMessage = 'An unexpected error type was encountered.'
         }
         return NextResponse.json({ error: 'Internal Server Error', details: errorMessage }, { status });
     }
