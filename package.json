@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@heroicons/react": "^2.2.0",
     "chart.js": "^4.4.8",
     "cosine-similarity": "^1.0.1",
     "katex": "^0.16.21",
